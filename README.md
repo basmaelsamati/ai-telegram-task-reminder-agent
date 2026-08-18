@@ -279,4 +279,6 @@ ai-telegram-task-reminder-agent/
 6. Configure the required Google Sheets structure.
 7. Activate the workflow.
 8. Start interacting with the assistant through Telegram.
+   
+<img width="1726" height="812" alt="Screenshot 2026-08-18 163421" src="https://github.com/user-attachments/assets/39c26548-30de-471a-bf59-3c55c3781112" />
 
