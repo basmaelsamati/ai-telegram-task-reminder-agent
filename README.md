@@ -267,7 +267,6 @@ ai-telegram-task-reminder-agent/
 │
 ├── workflow.json
 ├── README.md
-└── .gitignore
 ```
 
 ## Installation
