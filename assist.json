@@ -1,0 +1,2133 @@
+{
+  "name": "My workflow 18",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message.text }}",
+        "options": {
+          "systemMessage": "=You are a Telegram-based personal AI assistant that manages the user's tasks and reminders. You understand both Arabic and English.\n\nCURRENT DATE AND TIME (authoritative — never guess):\nCurrent date: {{ $now.setZone('Africa/Cairo').format('yyyy-MM-dd') }}\nCurrent day: {{ $now.setZone('Africa/Cairo').format('cccc') }}\nCurrent time: {{ $now.setZone('Africa/Cairo').format('HH:mm') }}\nTimezone: Africa/Cairo\n\nTIME RULES:\n- Always resolve dates/times in Africa/Cairo using the current date/time above.\n- \"today\" = the current date above. \"tomorrow\" = the next calendar day. \"yesterday\" = the previous calendar day.\n- \"after one hour\" / \"بعد ساعة\" etc. must be computed from the current time above, not guessed.\n- Store dates as YYYY-MM-DD, times as HH:mm, and combined reminder timestamps as \"YYYY-MM-DD HH:mm:ss\".\n- Never store words like \"tomorrow\" or \"later\" in any field — always resolve to an exact value first.\n- If a time is genuinely ambiguous (e.g. no AM/PM and context doesn't make it clear), ASK the user instead of guessing.\n- If a requested time has already passed today, only roll it to the next occurrence when the user's phrasing clearly implies that; otherwise ask.\n\nUSER IDENTITY:\n- The current user's user_id is always the Telegram chat id: {{ $('Telegram Trigger').item.json.message.chat.id }}\n- Never use any other value as user_id. Never access or modify another user's tasks or reminders.\n\nYOUR TOOLS:\n1. Create Task — saves a new task to the Tasks sheet. Use a short unique task_id you generate (e.g. T + timestamp/random suffix), never reuse an existing one.\n2. Create Reminder — saves a new reminder linked to an existing task_id. Requires a real task_id (create the task first if one doesn't exist yet).\n3. Search Tasks — looks up the current user's tasks. ALWAYS use this before completing a task, before answering \"what tasks do I have\", and whenever you are not 100% sure of an exact task_id.\n4. Search Reminders — looks up the current user's reminders. ALWAYS use this before snoozing a reminder, to find its exact reminder_id.\n5. Complete Task — marks a task as completed. Requires the exact task_id (get it from Search Tasks first).\n6. Complete Reminder — marks the reminder linked to a task as completed. Requires the exact task_id.\n7. Snooze Reminder — sets a reminder to snoozed with an exact snooze_until datetime. Requires the exact reminder_id (get it from Search Reminders first).\n\nCORE RULES:\n- NEVER invent task_id, reminder_id, dates, times, or the outcome of an action. Only confirm success after the corresponding tool call actually succeeds.\n- NEVER guess which task/reminder the user means. If \"خلصت\" / \"Done\" / \"تم\" etc. could match more than one pending task, call Search Tasks, then list the candidates and ask the user which one they mean before completing anything.\n- When completing a task, call Complete Task AND Complete Reminder for the same task_id. Only tell the user it's done if both calls succeed. If either fails, say so plainly — do not claim success.\n- When creating a reminder for a task that doesn't exist yet, create the task first (Create Task), then create the reminder with that same task_id.\n- For snoozing (\"أجلها ساعة\", \"snooze it for 30 minutes\"), use Search Reminders to find the right reminder_id, compute the exact new datetime from the current Cairo time above, then call Snooze Reminder.\n- For \"what tasks do I have\" style questions, use Search Tasks and summarize clearly (group by status/date if helpful).\n- Keep replies short, friendly, and in the same language the user used (Arabic or English).\n\nTASK COMPLETION TRIGGER PHRASES (Arabic & English):\nخلصت، خلص، خلصتها، تم، دفعت، اتعملت، عملتها، Done, Completed, Finished\n\nAlways follow the rules above even if the user is casual or terse — accuracy about what was actually saved matters more than a fast reply."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -256,
+        -48
+      ],
+      "id": "eb79b7e6-aead-4a5f-9f0f-5e8958d42878",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -496,
+        -48
+      ],
+      "id": "54cf5ad9-6548-41bd-929e-6b3bb3df3614",
+      "name": "Telegram Trigger",
+      "webhookId": "YOUR_WEBHOOK_ID_TELEGRAM_TRIGGER",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.message.chat.id }}",
+        "contextWindowLength": 50
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        -208,
+        176
+      ],
+      "id": "9e0c0ba0-0e30-4c65-b265-3881bd68aaa8",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        112,
+        -48
+      ],
+      "id": "565df9d1-b627-433d-b8c4-27a53c5e8006",
+      "name": "Send a text message",
+      "webhookId": "YOUR_WEBHOOK_ID_SEND_TEXT",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Creates and saves a new reminder in the Reminders Google Sheet, linked to an existing task_id. Only call this after the task already exists and the exact reminder date/time is known (never guess). reminder_time must be in Africa/Cairo, formatted as 'YYYY-MM-DD HH:mm:ss'. Do not send Telegram messages. Do not create a task with this tool — use the Create Task tool for that. Do not claim the reminder was saved unless this tool successfully completes.",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_REMINDERS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "Reminders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_REMINDERS_SHEET_GID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reminder_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('reminder_id', `Generate a short unique reminder ID you have not used before, e.g. R + timestamp/random suffix. Never reuse an existing reminder_id.`, 'string') }}",
+            "task_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('task_id', `The exact task_id of the task this reminder belongs to. Must be a real, previously created task_id — never invent one.`, 'string') }}",
+            "user_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+            "reminder_time": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('reminder_time', `The exact reminder date and time in Africa/Cairo, formatted exactly as YYYY-MM-DD HH:mm:ss. Never use words like 'tomorrow'.`, 'string') }}",
+            "status": "pending",
+            "attempt_count": "0",
+            "created_at": "={{ $now.setZone('Africa/Cairo').toFormat('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "reminder_id",
+              "displayName": "reminder_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_time",
+              "displayName": "reminder_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "snooze_until",
+              "displayName": "snooze_until",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "attempt_count",
+              "displayName": "attempt_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        128,
+        176
+      ],
+      "id": "10ffd00d-b6a5-433d-97f9-b464b7d25bd3",
+      "name": "Append row in sheet in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Creates and saves a new task in the Tasks Google Sheet.\n\nUse this tool when the user asks to create a task or a reminder that needs a task first.\n\nThe task must have a clear title and user_id.\n\nIf the user provides a date or time, save the exact resolved date and time (Africa/Cairo).\n\nGenerate a short unique task_id you have not used before, e.g. T + timestamp/random suffix. Never reuse an existing task_id.\n\nDo not send Telegram messages.\n\nDo not create reminders with this tool. Use the Create Reminder tool separately, with this same task_id.\n\nDo not claim that the task was created unless this tool successfully completes.",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_TASKS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_TASKS_SHEET_GID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "task_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('task_id', `Generate a unique ID for this task. Use a short unique identifier such as T001. Never reuse an existing task ID.`, 'string') }}",
+            "user_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+            "title": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('title', `The short, clear name of the task. Example: دفع فاتورة النت.`, 'string') }}",
+            "description": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('description', `A brief description of what the user needs to do. If no additional description is provided, leave it empty.`, 'string') }}",
+            "status": "pending",
+            "priority": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('priority', `Task priority. Use only: low, medium, or high. If the user does not specify a priority, use medium.`, 'string') }}",
+            "due_date": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('due_date', `The exact task date in YYYY-MM-DD format. Resolve words such as today and tomorrow using the current date and Africa/Cairo timezone. Never guess the date.`, 'string') }}",
+            "due_time": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('due_time', `The exact task time in HH:mm format using Africa/Cairo timezone. If the user does not provide a time, leave this field empty unless a default time is explicitly defined.`, 'string') }}",
+            "recurrence": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('recurrence', `The recurrence rule. Use none for a one-time task, or values such as daily, weekly, monthly. If the user does not request repetition, use none.`, 'string') }}",
+            "category": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('category', `The task category, such as bills, medication, car, personal, work, study, or other.`, 'string') }}",
+            "created_at": "={{ $now.setZone('Africa/Cairo').toFormat('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "due_date",
+              "displayName": "due_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "due_time",
+              "displayName": "due_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recurrence",
+              "displayName": "recurrence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "goal_id",
+              "displayName": "goal_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "completed_at",
+              "displayName": "completed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        288,
+        176
+      ],
+      "id": "3fbd0d08-d951-4c3d-9cd6-f7d7ff1a57a1",
+      "name": "Append row in sheet in Google Sheets1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -560,
+        592
+      ],
+      "id": "c8c94ecc-b8ca-406e-a43f-4bf06779fa26",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_REMINDERS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "Reminders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_REMINDERS_SHEET_GID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -336,
+        592
+      ],
+      "id": "eb9d8b8a-5bb1-4524-b800-51fb5789b8a7",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine which reminders are due, using safe Africa/Cairo string comparison.\n// reminder_time / follow_up_time / snooze_until are stored as 'YYYY-MM-DD HH:mm:ss'\n// which sorts correctly as plain strings, avoiding runtime-timezone Date bugs.\n\nconst cairoNowStr = $now.setZone('Africa/Cairo').toFormat('yyyy-MM-dd HH:mm:ss');\n\nconst results = [];\n\nfor (const item of items) {\n  const reminder = item.json;\n\n  // =========================\n  // INITIAL REMINDER\n  // =========================\n  if (\n    reminder.status === 'pending' &&\n    !reminder.sent_at &&\n    reminder.reminder_time &&\n    reminder.reminder_time <= cairoNowStr\n  ) {\n    results.push({ json: { ...reminder, action: 'send_reminder' } });\n    continue;\n  }\n\n  // =========================\n  // FOLLOW-UP\n  // =========================\n  if (\n    reminder.status === 'sent' &&\n    reminder.follow_up_time &&\n    reminder.follow_up_sent !== 'true' &&\n    reminder.follow_up_sent !== true &&\n    reminder.follow_up_time <= cairoNowStr\n  ) {\n    results.push({ json: { ...reminder, action: 'send_follow_up' } });\n    continue;\n  }\n\n  // =========================\n  // SNOOZE\n  // =========================\n  if (\n    reminder.status === 'snoozed' &&\n    reminder.snooze_until &&\n    reminder.snooze_until <= cairoNowStr\n  ) {\n    results.push({ json: { ...reminder, action: 'send_snoozed_reminder' } });\n  }\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        592
+      ],
+      "id": "8e41047a-48d1-4832-b463-9f62504c2466",
+      "name": "Code in JavaScript",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.user_id }}",
+        "text": "=⏰ تذكير! | {{ $json.title }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        640,
+        576
+      ],
+      "id": "662dddd8-6ea9-4ea3-a6b6-95aa9d3260ad",
+      "name": "Send a text message1",
+      "webhookId": "YOUR_WEBHOOK_ID_SEND_REMINDER",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_TASKS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_TASKS_SHEET_GID"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "task_id",
+              "lookupValue": "={{ $json.task_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        352,
+        576
+      ],
+      "id": "8de8a893-d67e-4620-8aab-dacb67bd69ac",
+      "name": "Get row(s) in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_REMINDERS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "Reminders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_REMINDERS_SHEET_GID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reminder_id": "={{ $('Code in JavaScript').item.json.reminder_id }}",
+            "status": "sent",
+            "sent_at": "={{ $now.setZone('Africa/Cairo').toFormat('yyyy-MM-dd HH:mm:ss') }}",
+            "attempt_count": "={{ (Number($('Code in JavaScript').item.json.attempt_count) || 0) + 1 }}",
+            "follow_up_time": "={{ $now.setZone('Africa/Cairo').plus({ hours: 1 }).toFormat('yyyy-MM-dd HH:mm:ss') }}",
+            "follow_up_sent": "false"
+          },
+          "matchingColumns": [
+            "reminder_id"
+          ],
+          "schema": [
+            {
+              "id": "reminder_id",
+              "displayName": "reminder_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_time",
+              "displayName": "reminder_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "snooze_until",
+              "displayName": "snooze_until",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "attempt_count",
+              "displayName": "attempt_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        864,
+        576
+      ],
+      "id": "16e305ff-4514-47bb-80f8-67246f5b9221",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "send_reminder",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "0d21841a-ef48-4a01-ae9b-720c318d62ac"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "send_reminder"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f636cb84-1ba6-406c-acbb-02c646f2014e",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "send_follow_up",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "send_follow_up"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "5b4b17af-20a1-4048-bbbc-b17bd846913d",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "send_snoozed_reminder",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "send_snoozed_reminder"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        112,
+        592
+      ],
+      "id": "a72acbb6-1eb5-4cb0-8302-b22a50c097c0",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_REMINDERS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "Reminders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_REMINDERS_SHEET_GID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reminder_id": "={{ $('Code in JavaScript').item.json.reminder_id }}",
+            "follow_up_sent": "true"
+          },
+          "matchingColumns": [
+            "reminder_id"
+          ],
+          "schema": [
+            {
+              "id": "reminder_id",
+              "displayName": "reminder_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_time",
+              "displayName": "reminder_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "snooze_until",
+              "displayName": "snooze_until",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "attempt_count",
+              "displayName": "attempt_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "follow_up_time",
+              "displayName": "follow_up_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "follow_up_sent",
+              "displayName": "follow_up_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "completed_at",
+              "displayName": "completed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        656,
+        752
+      ],
+      "id": "a1e06394-5522-4458-8577-616ea850b125",
+      "name": "Update row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.user_id }}",
+        "text": "=⏰ تذكير! | {{ $json.title }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        464,
+        752
+      ],
+      "id": "2f9ba22b-5153-456d-b396-246a328cdc7d",
+      "name": "Send a text message2",
+      "webhookId": "YOUR_WEBHOOK_ID_SEND_FOLLOWUP",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Marks a task as completed in the Tasks Google Sheet. Requires the EXACT task_id of the task (use the Search Tasks tool first to confirm it — never guess or invent a task_id). Only call this once the correct task has been identified with certainty; if more than one task could match, ask the user which one they mean before calling this tool.",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_TASKS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_TASKS_SHEET_GID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "task_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('task_id', `The exact task_id of the task to mark completed. Must be a real task_id confirmed via Search Tasks.`, 'string') }}",
+            "completed_at": "={{ $now.setZone('Africa/Cairo').toFormat('yyyy-MM-dd HH:mm:ss') }}",
+            "status": "completed",
+            "user_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+          },
+          "matchingColumns": [
+            "task_id",
+            "user_id"
+          ],
+          "schema": [
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "due_date",
+              "displayName": "due_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "due_time",
+              "displayName": "due_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recurrence",
+              "displayName": "recurrence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "goal_id",
+              "displayName": "goal_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "completed_at",
+              "displayName": "completed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        176
+      ],
+      "id": "321c7d92-a4e9-4e33-b593-d9ae2ba8b246",
+      "name": "Update row in sheet in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Marks the reminder linked to a task as completed in the Reminders Google Sheet. Requires the EXACT task_id (the same one used with Complete Task — never guess or invent it). Call this together with Complete Task whenever the user says they finished something; only confirm completion to the user if both calls succeed.",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_REMINDERS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "Reminders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_REMINDERS_SHEET_GID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "task_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('task_id', `The exact task_id whose linked reminder should be marked completed. Must match the task_id used with Complete Task.`, 'string') }}",
+            "completed_at": "={{ $now.setZone('Africa/Cairo').toFormat('yyyy-MM-dd HH:mm:ss') }}",
+            "status": "completed",
+            "user_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+          },
+          "matchingColumns": [
+            "task_id",
+            "user_id"
+          ],
+          "schema": [
+            {
+              "id": "reminder_id",
+              "displayName": "reminder_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_time",
+              "displayName": "reminder_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "snooze_until",
+              "displayName": "snooze_until",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "attempt_count",
+              "displayName": "attempt_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "follow_up_time",
+              "displayName": "follow_up_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "follow_up_sent",
+              "displayName": "follow_up_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "completed_at",
+              "displayName": "completed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -32,
+        176
+      ],
+      "id": "2b0b6567-aee4-4b48-8f8b-9b4aa5a6ece8",
+      "name": "Update row in sheet in Google Sheets1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.user_id }}",
+        "text": "=⏰ تذكير! | {{ $json.title }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        512,
+        1040
+      ],
+      "id": "47fd7e27-f35c-4f48-8efa-b0fc9be553f0",
+      "name": "Send a text message3",
+      "webhookId": "YOUR_WEBHOOK_ID_SEND_SNOOZED",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_REMINDERS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "Reminders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_REMINDERS_SHEET_GID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reminder_id": "={{ $('Code in JavaScript').item.json.reminder_id }}",
+            "status": "sent",
+            "sent_at": "={{ $now.setZone('Africa/Cairo').toFormat('yyyy-MM-dd HH:mm:ss') }}",
+            "attempt_count": "={{ (Number($('Code in JavaScript').item.json.attempt_count) || 0) + 1 }}",
+            "snooze_until": ""
+          },
+          "matchingColumns": [
+            "reminder_id"
+          ],
+          "schema": [
+            {
+              "id": "reminder_id",
+              "displayName": "reminder_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminder_time",
+              "displayName": "reminder_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "snooze_until",
+              "displayName": "snooze_until",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "attempt_count",
+              "displayName": "attempt_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        704,
+        1056
+      ],
+      "id": "d30fea07-f7f7-4e09-818a-b7350dc0c6a1",
+      "name": "Update row in sheet2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Searches the Tasks Google Sheet for the current user's tasks. Always returns only this user's own tasks. Use this BEFORE completing a task (to find the exact task_id), before creating a task that might already exist, and whenever the user asks what tasks/reminders they have. If the user's request could match more than one task, show the candidates and ask which one they mean instead of guessing.",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_TASKS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_TASKS_SHEET_GID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        -48
+      ],
+      "id": "41be506e-ff0c-4ace-b757-68e3d8487a70",
+      "name": "Search Tasks in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Searches the Reminders Google Sheet for the current user's reminders. Always returns only this user's own reminders. Use this BEFORE snoozing a reminder (to find its exact reminder_id) or whenever you need to check the state of a reminder. Never guess a reminder_id — always confirm it here first.",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_REMINDERS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "Reminders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_REMINDERS_SHEET_GID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        608,
+        -48
+      ],
+      "id": "f4e7e6b9-da5f-4cc0-9da1-798b3a21fc2c",
+      "name": "Search Reminders in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Snoozes an existing reminder. Requires the EXACT reminder_id (find it with Search Reminders first — never invent it) and the exact new snooze_until datetime in Africa/Cairo, formatted as 'YYYY-MM-DD HH:mm:ss', computed from the current Cairo time given in your instructions (e.g. 'snooze it for 1 hour' = current Cairo time + 1 hour). Sets status to snoozed.",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_REMINDERS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "Reminders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_REMINDERS_SHEET_GID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reminder_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('reminder_id__using_to_match_', `The exact reminder_id to snooze. Must be confirmed via Search Reminders — never invent it.`, 'string') }}",
+            "user_id": "={{ $json.message.chat.id }}",
+            "status": "snoozed",
+            "snooze_until": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('snooze_until', `The exact new date and time to resend this reminder, in Africa/Cairo, formatted as YYYY-MM-DD HH:mm:ss.`, 'string') }}"
+          },
+          "matchingColumns": [
+            "reminder_id",
+            "user_id"
+          ],
+          "schema": [
+            {
+              "id": "reminder_id",
+              "displayName": "reminder_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_time",
+              "displayName": "reminder_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "snooze_until",
+              "displayName": "snooze_until",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "attempt_count",
+              "displayName": "attempt_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "follow_up_time",
+              "displayName": "follow_up_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "follow_up_sent",
+              "displayName": "follow_up_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "completed_at",
+              "displayName": "completed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        768,
+        -48
+      ],
+      "id": "ae2685d1-f64c-4128-a7b2-afd57318fd15",
+      "name": "Snooze Reminder in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_TASKS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_TASKS_SHEET_GID"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "task_id",
+              "lookupValue": "={{ $('Code in JavaScript').item.json.task_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        288,
+        752
+      ],
+      "id": "9a8c4164-a9ae-490f-87b6-9ce985b5d1e3",
+      "name": "Get Task for Follow-up",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_TASKS_SHEET_GID",
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=YOUR_TASKS_SHEET_GID"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "task_id",
+              "lookupValue": "={{ $('Code in JavaScript').item.json.task_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        336,
+        1024
+      ],
+      "id": "6483a1ca-1fa5-4fdf-948a-683baf3eedcc",
+      "name": "Get Task for Snoozed",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAlibabaCloud",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        160
+      ],
+      "id": "ff203eac-fda0-42b1-a965-0da1af0cbcbf",
+      "name": "Qwen Cloud Chat Model",
+      "credentials": {
+        "alibabaCloudApi": {
+          "id": "YOUR_QWEN_CLOUD_CREDENTIAL_ID",
+          "name": "Qwen Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 624,
+        "width": 1792
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -656,
+        -144
+      ],
+      "typeVersion": 1,
+      "id": "72d3fd0a-c59f-413c-9a9a-4b5b41f9e490",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 752,
+        "width": 1792,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -656,
+        528
+      ],
+      "typeVersion": 1,
+      "id": "0b548fcc-0292-4af1-b50e-5dfff5571f46",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet in Google Sheets1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message1": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Task for Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Task for Snoozed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message2": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update row in sheet in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update row in sheet in Google Sheets1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message3": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Tasks in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Reminders in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Snooze Reminder in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Task for Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Send a text message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Task for Snoozed": {
+      "main": [
+        [
+          {
+            "node": "Send a text message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qwen Cloud Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "YOUR_VERSION_ID",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_INSTANCE_ID"
+  },
+  "nodeGroups": [],
+  "id": "YOUR_WORKFLOW_ID",
+  "tags": []
+}
