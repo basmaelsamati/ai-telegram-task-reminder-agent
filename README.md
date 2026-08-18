@@ -1,6 +1,3 @@
-أيوه، نعمله من الأول بالـ **Qwen** بدل Gemini، وده النسخة اللي أنصحك تحطيها في `README.md`:
-
-````markdown
 # AI Telegram Task & Reminder Agent
 
 An AI-powered personal task and reminder assistant built with n8n, Telegram, Google Sheets, and Qwen.
